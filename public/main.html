@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@2.8.0"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" integrity="sha512-894YE6QWD5I59HgZOGReFYm4dnWc1Qt5NtvYSaNcOP+u1T9qYdvdihz0PPSiiqn/+/3e7Jo4EaG7TubfWGUrMQ==" crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-annotation/0.2.0/chartjs-plugin-annotation.min.js" integrity="sha512-KHd20JNrYKjWELvD8K3EKO3PkFn9cuGzD8oSjrh+Rwhxgw59u8WcgjnRR3rpevqmAPfl8yta5NcepbYh9kVe+w==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <title>Document</title>
+    <style>
+        li {
+            list-style: none;
+            display: inline;
+        }
+
+        ul.navBar {
+            margin-left: auto;
+            margin-right: auto;
+            max-width: fit-content;
+            padding-left: 0;
+        }
+
+        body {
+            background-color: #2f3134;
+        }
+
+        #nav {
+            margin: auto;
+            top: 15px;
+            left: 50%;
+            width: fit-content;
+            border-radius: 5px;
+            border: 2px solid #46484d;
+            margin-bottom: 10px;
+        }
+
+        ul {
+            position: relative;
+            display: flex;
+            flex: 1 1 auto;
+            margin: 0;
+            list-style-type: none;
+        }
+
+        li {
+            border: 2px solid transparent;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: ease-in 0.2s;
+        }
+
+        input[type="button"] {
+            min-width: 75px;
+            min-height: 25px;
+            width: 100%;
+            height: 100%;
+            background-color: transparent;
+            border: none;
+            cursor: pointer;
+        }
+
+        li:hover {
+            background: #24c9d4;
+            border: 2px solid #4cc8d1;
+            border-right: 2px solid #00e9fa;
+            border-bottom: 2px solid #00e9fa;
+        }
+
+        li:hover > input[type="button"] {
+            color: white;
+        }
+
+        .panel {
+            grid-template-columns: repeat(5, 1fr);
+        }
+
+        .mainPanelBig {
+            width: 100%;
+            grid-row: 1 / 3;
+        }
+
+        #cpuUtilization {
+            grid-column: 1 / 3;
+        }
+
+        #ramUtilization {
+            grid-column: 3 / 5;
+        }
+
+        .mainPanelSmall {
+            width: 100%;
+            grid-column: 5;
+        }
+
+        #writeActivity {
+            grid-row: 1;
+        }
+
+        #readActivity {
+            grid-row: 2;
+        }
+    </style>
+</head>
+<body>
+    <div class="navBar" id="nav">
+        <ul class="navBar">
+            <li><input type="button" onclick="changeGraph(this.value)" value="Temps"></li>
+            <li><input type="button" onclick="changeGraph(this.value)" value="Frequency"></li>
+            <li><input type="button" onclick="changeGraph(this.value)" value="Memory usage"></li>
+            <li><input type="button" onclick="changeGraph(this.value)" value="Case fans"></li>
+            <li><input type="button" onclick="changeGraph(this.value)" value="Network"></li>
+            <li><input type="button" onclick="archiveLogs()" value="Archive Logs"></li>
+            <li><input type="button" onclick="showMainPanel()" value="Main Panel"></li>
+        </ul>
+    </div>
+    <div class="monitoring">
+        <canvas id="chart" style="max-width: 100%; max-height: 92vh; margin: auto"></canvas>
+    </div>
+    <div class="panel" style="display:none">
+        <canvas id="cpuUtilization" class="mainPanelBig" style="display: inline-block"></canvas>
+        <canvas id="ramUtilization" class="mainPanelBig" style="display: inline-block"></canvas>
+        <canvas id="writeActivity" class="mainPanelSmall" style="display: inline-block"></canvas>
+        <canvas id="readActivity" class="mainPanelSmall" style="display: inline-block"></canvas>
+
+    </div>
+</body>
+<script>
+    var type = "temps"
+    var previousType
+
+    var mainLoop = setInterval(() => {
+        fetch("getData")
+            .then(function (response) {
+                return response.text()
+            })
+            .then((txt) => {
+                updateCanvas(JSON.parse(txt), type)
+            })
+    }, 2000)
+
+    var lineChart;
+
+    function showMainPanel() {
+        document.getElementsByClassName("monitoring")[0].style.display = "none"
+        document.getElementsByClassName("panel")[0].style.display = "grid"
+        lineChart.destroy()
+        window.clearInterval(mainLoop)
+        lineChart = []
+
+        
+
+        let toUpdate = ["cpuUtilization", "ramUtilization", "writeActivity", "readActivity"]
+        let labels = ["CPU Utilization", "RAM Utilization", "Write Activity", "Read Activity"]
+
+        toUpdate.forEach((element, index) => {
+            const data = {
+                labels: ['', ''],
+                datasets: [{
+                    label: labels[index],
+                    data: [0, 100],
+                    backgroundColor: [
+                    'rgb(50, 200, 235)',
+                    'rgb(44, 132, 205)'
+                    ],
+                    hoverOffset: 4
+                }]
+            };
+
+            var ctx = document.getElementById(element).getContext('2d');
+            lineChart.push(new Chart(ctx, {
+                type: 'doughnut',
+                data: data,
+                options: {
+                    cutoutPercentage: (labels[index].includes("Activity") ? 60 : 50),
+                    responsive: false,
+                    aspectRatio: 1,
+                    tooltips : {
+                        enabled: false,
+                    },
+                    title: {
+                        display: true,
+                        text: labels[index],
+                        position: "bottom",
+                        fontSize: 30,
+                    },
+                    legend: {
+                        display: false,
+                    }
+                }
+            }));
+        });
+
+        
+
+        mainLoop = setInterval(() => {
+            fetch("getData")
+                .then(function (response) {
+                    return response.text()
+                })
+                .then((txt) => {
+                    updateMonitoring(JSON.parse(txt))
+                })
+        }, 2000)
+    }
+
+    function updateMonitoring(data) {
+        if (lineChart.length == 4) {
+            lineChart.forEach(chart => {
+                switch (chart.data.datasets[0].label) {
+                    case "CPU Utilization":
+                        let avgLoad = parseFloat(data["Core 0 Usage [%]"][0]) + parseFloat(data["Core 1 Usage [%]"][0]) + parseFloat(data["Core 2 Usage [%]"][0]) + parseFloat(data["Core 3 Usage [%]"][0])
+                        avgLoad /= 4
+                        avgLoad = Math.round(avgLoad * 100) / 100
+                        chart.data.datasets[0].data = [avgLoad, 100 - avgLoad]
+                        chart.options.title.text = chart.data.datasets[0].label + "\n" + avgLoad + " %"
+                        break
+                    case "RAM Utilization":
+                        var avg = parseFloat(data["Physical Memory Load [%]"][0])
+                        avg = Math.round(avg * 100) / 100
+                        chart.data.datasets[0].data = [avg, 100 - avg]
+                        chart.options.title.text = chart.data.datasets[0].label + "\n" + avg + " %"
+                        break
+                    case "Write Activity":
+                        var avg = parseFloat(data["Write Activity [%]"][0])
+                        avg = Math.round(avg * 100) / 100
+                        chart.data.datasets[0].data = [avg, 100 - avg]
+                        chart.options.title.text = chart.data.datasets[0].label + "\n" + avg + " %"
+                        break
+                    case "Read Activity":
+                        var avg = parseFloat(data["Read Activity [%]"][0])
+                        avg = Math.round(avg * 100) / 100
+                        if (isNaN(avg)) {
+                            avg = 0
+                        }
+                        chart.data.datasets[0].data = [avg, 100 - avg]
+                        chart.options.title.text = chart.data.datasets[0].label + "\n" + avg + " %"
+                        break
+                }
+                
+                chart.update()
+            });
+        }
+    }
+
+    function main(data, type) {
+        var chartOptions = {
+            animation: 0,
+            elements: {
+                line: {
+                    tension: 0
+                }
+            },
+            legend: {
+                display: true,
+                position: 'top',
+                labels: {
+                        boxWidth: 20,
+                        fontColor: 'black'
+                    }
+                },
+                scales: {
+                    yAxes: [{
+                        display: true,
+                        ticks: {
+                            fontColor: "black",
+                            suggestedMin: 0,
+                            suggestedMax: 100,
+                            stepSize: 5,
+                        }
+                    }],
+                    xAxes: [{
+                        display:true,
+                        ticks: {
+                            fontColor: "black",
+                            beginAtZero: true,
+                            suggestedMax: 20,
+                            stepSize: 1,
+                            stepWidth: 1,
+                        }
+                    }]
+            }
+        };
+        switch(type) {
+            case "temps":
+                data["Motherboard [°C]"].reverse().pop()
+                var mainData = {
+                    labels: data.Time.reverse(),
+                    datasets: [{
+                        backgroundColor: "#002002",
+                        borderColor: "#004004",
+                        fill: false,
+                        label: "CPU",
+                        data: data["CPU Package [°C]"].reverse(),
+                    },{
+                        backgroundColor: "#2F0010",
+                        borderColor: "#5F0010",
+                        fill: false,
+                        label: "GPU",
+                        data: data["GPU Temperature [°C]"].reverse(),
+                        borderWidth: 1.5,
+                        pointRadius: 1.5,
+                    },{
+                        backgroundColor: "#101060",
+                        borderColor: "#1020A0",
+                        fill: false,
+                        label: "Motherboard",
+                        data: data["Motherboard [°C]"],
+                        borderWidth: 1.5,
+                        pointRadius: 1.5,
+                    }]
+                };
+                break;
+            case "CPU frequency":
+                chartOptions.scales.yAxes[0].ticks.suggestedMax = 4600
+                chartOptions.scales.yAxes[0].ticks.stepSize = 500
+                chartOptions.legend.display = false
+                data["Motherboard [°C]"].reverse().pop()
+                var mainData = {
+                    labels: data.Time.reverse(),
+                    datasets: [{
+                        backgroundColor: "#2F0010",
+                        borderColor: "#5F0010",
+                        fill: false,
+                        label: "Average core clock",
+                        data: data["Average Effective Clock [MHz]"].reverse(),
+                        
+                    },{
+                        backgroundColor: "#120010",
+                        borderColor: "#1F0010",
+                        fill: false,
+                        label: "Core 0",
+                        data: data["Core 0 Effective Clock [MHz]"].reverse(),
+                        borderWidth: 1,
+                        pointRadius: 1,
+                    },{
+                        backgroundColor: "#120010",
+                        borderColor: "#1F0010",
+                        fill: false,
+                        label: "Core 1",
+                        data: data["Core 1 Effective Clock [MHz]"].reverse(),
+                        borderWidth: 1,
+                        pointRadius: 1,
+                    },{
+                        backgroundColor: "#120010",
+                        borderColor: "#1F0010",
+                        fill: false,
+                        label: "Core 2",
+                        data: data["Core 2 Effective Clock [MHz]"].reverse(),
+                        borderWidth: 1,
+                        pointRadius: 1,
+                    },{
+                        backgroundColor: "#120010",
+                        borderColor: "#1F0010",
+                        fill: false,
+                        label: "Core 3",
+                        data: data["Core 3 Effective Clock [MHz]"].reverse(),
+                        borderWidth: 1,
+                        pointRadius: 1,
+                    }]
+                };
+                break;
+            case "RAM":
+                chartOptions.scales.yAxes[0].ticks.suggestedMax = 24000
+                chartOptions.scales.yAxes[0].ticks.stepSize = 1000
+                var mainData = {
+                    labels: data.Time.reverse(),
+                    datasets: [{
+                        backgroundColor: "rgba(1, 32, 32, 0.25)",
+                        borderColor: "#015010",
+                        fill: true,
+                        label: "Memory Usage (MB)",
+                        data: data["Physical Memory Used [MB]"].reverse(),
+                        
+                    }]
+                };
+                break;
+            case "Fans":
+                chartOptions.scales.yAxes[0].ticks.suggestedMax = 2000
+                chartOptions.scales.yAxes[0].ticks.stepSize = 100
+                var mainData = {
+                    labels: data.Time.reverse(),
+                    datasets: [{
+                        backgroundColor: "rgba(1, 32, 32, 0.25)",
+                        borderColor: "#015010",
+                        fill: false,
+                        label: "Watercooling fan (RPM)",
+                        data: data["CPU [RPM]"].reverse(),
+                        
+                    },{
+                        backgroundColor: "rgba(107, 37, 85, 0.25)",
+                        borderColor: "#991487",
+                        fill: false,
+                        label: "Front case fan (RPM)",
+                        data: data["Chassis1 [RPM]"].reverse(),
+                        
+                    }]
+                };
+                break;
+            case "Network":
+                chartOptions.scales.yAxes[0].ticks.suggestedMax = 400;
+                chartOptions.scales.yAxes[0].ticks.stepSize = 10;
+                var mainData = {
+                    labels: data.Time.reverse(),
+                    datasets: [{
+                        backgroundColor: "#5F2020",
+                        borderColor: "#AF2020",
+                        fill: false,
+                        label: "Down Speed (KB/s)",
+                        data: data["Current DL rate [KB/s]"].reverse(),
+                        
+                    },{
+                        backgroundColor: "#20206F",
+                        borderColor: "#2020AF",
+                        fill: false,
+                        label: "Up Speed (KB/s)",
+                        data: data["Current UP rate [KB/s]"].reverse(),
+                        
+                    }]
+                };
+        }
+
+        if (lineChart) {
+            lineChart.destroy()
+        }
+        
+        var ctx = document.getElementById('chart').getContext('2d');
+        lineChart = new Chart(ctx, {
+            type: 'line',
+            data: mainData,
+            options: chartOptions
+        });
+    }
+
+    function updateCanvas(data, type) {
+        if (!lineChart || lineChart.length != 4) {
+            if (!lineChart || previousType != type) {
+                main(data, type)
+            } else {
+                switch (type) {
+                    case "temps":
+                        data["Motherboard [°C]"].reverse().pop()
+                        lineChart.data.datasets[0].data = data["CPU Package [°C]"].reverse()
+                        lineChart.data.datasets[1].data = data["GPU Temperature [°C]"].reverse()
+                        lineChart.data.datasets[2].data = data["Motherboard [°C]"]
+                        break;
+                    case "CPU frequency":
+                        lineChart.data.datasets[0].data = data["Average Effective Clock [MHz]"].reverse()
+                        lineChart.data.datasets[1].data = data["Core 0 Effective Clock [MHz]"].reverse()
+                        lineChart.data.datasets[2].data = data["Core 1 Effective Clock [MHz]"].reverse()
+                        lineChart.data.datasets[3].data = data["Core 2 Effective Clock [MHz]"].reverse()
+                        lineChart.data.datasets[4].data = data["Core 3 Effective Clock [MHz]"].reverse()
+                        break;
+                    case "RAM":
+                        lineChart.data.datasets[0].data = data["Physical Memory Used [MB]"].reverse()
+                        break;
+                    case "Fans":
+                        lineChart.data.datasets[0].data = data["CPU [RPM]"].reverse()
+                        lineChart.data.datasets[1].data = data["Chassis1 [RPM]"].reverse()
+                        break;
+                    case "Network":
+                        lineChart.data.datasets[0].data = data["Current DL rate [KB/s]"].reverse()
+                        lineChart.data.datasets[1].data = data["Current UP rate [KB/s]"].reverse()
+                }
+                
+                lineChart.data.labels = data.Time.reverse()
+                lineChart.update()
+            }
+            previousType = type
+        }
+    }
+
+    function changeGraph(txt) {
+        if (lineChart && lineChart.length == 4) {
+            lineChart.forEach(chart => {
+                if (chart) {
+                    chart.destroy()
+                }
+            });
+            window.clearInterval(mainLoop)
+            mainLoop = setInterval(() => {
+                fetch("getData")
+                    .then(function (response) {
+                        return response.text()
+                    })
+                    .then((txt) => {
+                        updateCanvas(JSON.parse(txt), type)
+                    })
+            }, 2000)
+            lineChart = undefined
+            document.getElementsByClassName("panel")[0].style.display = "none"
+            document.getElementsByClassName("monitoring")[0].style.display = "block"
+
+        }
+        switch(txt) {
+            case "Temps":
+                type = "temps";
+                break;
+            case "Frequency":
+                type = "CPU frequency"
+                break;
+            case "Memory usage":
+                type = "RAM"
+                break;
+            case "Case fans":
+                type = "Fans"
+                break;
+            case "Network":
+                type = "Network"
+        }
+    }
+
+    function archiveLogs() {
+        fetch("/archiveLogs")
+            .then(function (sizes) {return sizes.text})
+            .then((txt) => {
+                let sizes = JSON.parse(txt)
+                window.alert(`Added ${sizes[0]} lines to the archive logs, there's ${sizes[1]} lines in the current log file`)
+            })
+            .catch(e => window.alert(`The archive file wasn't found.`))
+    }
+</script>
+</html>

@@ -1,0 +1,9 @@
+{
+  "dependencies": {
+    "express": "^4.17.3",
+    "fs": "^0.0.1-security",
+    "typescript": "^4.6.2",
+    "yahoo-finance": "^0.3.7",
+    "yahoo-finance2": "^2.3.0"
+  }
+}
